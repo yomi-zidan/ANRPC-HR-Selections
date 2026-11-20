@@ -51,6 +51,7 @@ export default function HRLogin() {
 
       router.push("/hr/dashboard");
     } catch (err) {
+      console.error("HR Login Error:", err);
       setError("تعذر الاتصال بالخادم. تأكدي من تشغيل Laravel.");
     } finally {
       setLoading(false);
@@ -58,7 +59,9 @@ export default function HRLogin() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5" dir="rtl">
+
+      {/* Username */}
       <div className="space-y-2">
         <Label>اسم المستخدم</Label>
 
@@ -78,6 +81,7 @@ export default function HRLogin() {
         </div>
       </div>
 
+      {/* Password */}
       <div className="space-y-2">
         <Label>كلمة المرور</Label>
 
@@ -97,19 +101,24 @@ export default function HRLogin() {
         </div>
       </div>
 
+      {/* Error Message */}
       {error && (
         <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600" dir="rtl">
           {error}
         </p>
       )}
 
-      <Button
-        className="h-12 w-full bg-[#163B63] text-base hover:bg-[#0D2B4B]"
-        type="submit"
-        disabled={loading}
-      >
-        {loading ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
-      </Button>
+      {/* Login Button */}
+      <div className="w-full cursor-pointer">
+        <Button
+          type="submit"
+          disabled={loading}
+          className="h-12 w-full cursor-pointer bg-[#163B63] text-base text-white hover:bg-[#0D2B4B] disabled:pointer-events-none disabled:bg-[#163B63] disabled:text-white disabled:opacity-100"
+        >
+          {loading ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
+        </Button>
+      </div>
+
     </form>
   );
 }

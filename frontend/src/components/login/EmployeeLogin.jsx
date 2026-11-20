@@ -48,7 +48,6 @@ export default function EmployeeLogin() {
 
       const data = await response.json();
 
-      // Check login response
       if (!response.ok || !data.success || !data.token) {
         setError(
           data.message || "الرقم الوظيفي أو الرقم القومي غير صحيح"
@@ -56,20 +55,16 @@ export default function EmployeeLogin() {
         return;
       }
 
-      // Save authentication token
       sessionStorage.setItem("auth_token", data.token);
 
-      // Save employee information
       sessionStorage.setItem(
         "employee",
         JSON.stringify(data.employee)
       );
 
-      // Navigate to employee submissions
       router.push("/employee/submissions");
-
-    } catch (error) {
-      console.error("Employee Login Error:", error);
+    } catch (err) {
+      console.error("Employee Login Error:", err);
 
       setError(
         "تعذر الاتصال بالخادم، برجاء المحاولة مرة أخرى"
@@ -95,9 +90,9 @@ export default function EmployeeLogin() {
             placeholder="أدخل الرقم الوظيفي"
             className="h-12 pr-10 text-right"
             value={empn}
-            onChange={(e) =>
-              setEmpn(e.target.value.replace(/\D/g, ""))
-            }
+            onChange={(e) => {
+              setEmpn(e.target.value.replace(/\D/g, ""));
+            }}
             required
           />
         </div>
@@ -117,21 +112,21 @@ export default function EmployeeLogin() {
             placeholder="أدخل الرقم القومي"
             className="h-12 pr-10 pl-11 text-right"
             value={nationalId}
-            onChange={(e) =>
+            onChange={(e) => {
               setNationalId(
                 e.target.value.replace(/\D/g, "").slice(0, 14)
-              )
-            }
+              );
+            }}
             required
           />
 
           {/* Show / Hide National ID */}
           <button
             type="button"
-            onClick={() =>
-              setShowNationalId((prev) => !prev)
-            }
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#163B63] transition-colors"
+            onClick={() => {
+              setShowNationalId((prev) => !prev);
+            }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 cursor-pointer text-slate-400 transition-colors hover:text-[#163B63]"
             aria-label={
               showNationalId
                 ? "إخفاء الرقم القومي"
@@ -155,30 +150,32 @@ export default function EmployeeLogin() {
 
       {/* Error Message */}
       {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 text-center">
+        <div className="rounded-lg bg-red-50 p-3 text-center text-sm text-red-600">
           {error}
         </div>
       )}
 
       {/* Login Button */}
-      <Button
-        type="submit"
-        disabled={
-          loading ||
-          nationalId.length !== 14 ||
-          !empn
-        }
-        className="!h-12 !w-full !bg-[#163B63] !text-base !text-white hover:!bg-[#0D2B4B] disabled:!bg-[#163B63] disabled:!text-white disabled:!opacity-100"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-            جاري تسجيل الدخول...
-          </>
-        ) : (
-          "تسجيل الدخول"
-        )}
-      </Button>
+      <div className="w-full cursor-pointer">
+        <Button
+          type="submit"
+          disabled={
+            loading ||
+            nationalId.length !== 14 ||
+            !empn
+          }
+          className="h-12 w-full cursor-pointer bg-[#163B63] text-base text-white hover:bg-[#0D2B4B] disabled:pointer-events-none disabled:bg-[#163B63] disabled:text-white disabled:opacity-100"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+              جاري تسجيل الدخول...
+            </>
+          ) : (
+            "تسجيل الدخول"
+          )}
+        </Button>
+      </div>
 
     </form>
   );

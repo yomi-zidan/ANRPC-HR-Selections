@@ -2,28 +2,47 @@
 export default function LoginBackground({ children }) {
   return (
     <main
-      className="relative flex min-h-dvh w-full items-center justify-center
-      overflow-x-hidden bg-cover bg-center bg-no-repeat
-      px-4 py-8 sm:px-6 sm:py-10"
+      dir="ltr"
+      className="
+        relative flex h-dvh w-full min-h-0
+        items-center justify-center
+        overflow-hidden
+        bg-cover bg-center bg-no-repeat
+        px-3
+        sm:px-6
+        lg:justify-end lg:px-12
+        xl:px-20
+      "
       style={{
         backgroundImage: "url('/images/login-bg.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
       }}
     >
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-[#071B33]/65" />
+      {/* Background Overlay */}
+      <div className="absolute inset-0 bg-[#071B33]/45" />
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br
-        from-[#0B2B4C]/40 via-transparent to-[#071B33]/75" />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0B2B4C]/30 via-transparent to-[#071B33]/70" />
 
-      {/* Login Content */}
-      <div className="relative z-10 w-full max-w-[460px]">
+      {/* Login Card Container */}
+      <div
+        dir="rtl"
+        className="
+          relative z-10 w-full
+          max-w-[410px]
+          lg:mr-0
+        "
+      >
         {children}
       </div>
 
       {/* Footer */}
-      <footer className="absolute bottom-3 left-0 right-0 z-10
-        px-3 text-center text-[10px] text-white/70 sm:text-xs">
+      <footer
+        className="
+          absolute bottom-2 left-0 right-0 z-10
+          px-3 text-center text-[10px] text-white/70
+        "
+      >
         Alexandria National Refining and Petrochemicals Company
       </footer>
     </main>

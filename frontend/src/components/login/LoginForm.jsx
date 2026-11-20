@@ -15,40 +15,21 @@ export default function LoginForm() {
   const [userType, setUserType] = useState("employee");
 
   return (
-    <Card className="w-full overflow-hidden rounded-2xl
+    <Card className="w-full h-lvh  overflow-hidden rounded-3xl
       border border-white/50 bg-white shadow-2xl
       shadow-black/20">
 
-      <CardContent className="p-5 sm:p-8 md:p-9">
+      <CardContent className="p-4 sm:p-5 md:p-6">
 
         {/* Company Identity */}
         <div className="mb-6 flex flex-col items-center text-center">
 
-          <div className="relative mb-3 h-[76px] w-[76px]
-            sm:h-[88px] sm:w-[88px]">
-
-            <Image
-              src="/images/anrpc-logo.png"
-              alt="ANRPC Logo"
-              fill
-              priority
-              sizes="88px"
-              className="object-contain"
-            />
-
-          </div>
-
           <h1 className="text-2xl font-bold tracking-wide
             text-[#163B63] sm:text-3xl">
-            ANRPC
+            التميز المؤسسي
           </h1>
-
-          <p className="mt-1 text-xs text-slate-500 sm:text-sm">
-            HR Selections Portal
-          </p>
-
-          <p className="mt-2 text-sm font-medium text-slate-600">
-            بوابة المسابقة الداخلية
+          <p className="mt-6 text-xs font-medium text-slate-600">
+            قصص النجاح و الإنجازات المتميزة
           </p>
         </div>
 

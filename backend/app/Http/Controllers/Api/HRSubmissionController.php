@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 use Throwable;
 
 class HRSubmissionController extends Controller
@@ -28,14 +27,16 @@ class HRSubmissionController extends Controller
             );
 
             if (
+                !is_array($payload) ||
                 empty($payload['id_user']) ||
                 empty($payload['expires_at']) ||
-                $payload['expires_at'] < now()->timestamp
+                (int) $payload['expires_at'] < now()->timestamp
             ) {
                 return null;
             }
 
             return (int) $payload['id_user'];
+
         } catch (Throwable $e) {
             return null;
         }
@@ -239,7 +240,7 @@ class HRSubmissionController extends Controller
     }
 
     // =========================================
-    // Preview / download submission attachment
+    // Preview submission attachment
     // =========================================
     public function file(Request $request, int $fileId)
     {
@@ -273,16 +274,28 @@ class HRSubmissionController extends Controller
             ], 404);
         }
 
+        // Resolve the storage directory
+        $basePath = realpath($file->BasePath);
+
+        if (!$basePath || !is_dir($basePath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'مجلد تخزين الملفات غير موجود.',
+            ], 404);
+        }
+
+        // Normalize relative path
         $relativePath = str_replace(
             ['/', '\\'],
             DIRECTORY_SEPARATOR,
             $file->RelativePath
         );
 
-        // منع الوصول إلى ملفات خارج مجلد التخزين
+        // Reject absolute paths and traversal
         if (
-            Str::contains($relativePath, '..') ||
-            Str::startsWith($relativePath, DIRECTORY_SEPARATOR)
+            $relativePath === '' ||
+            str_contains($relativePath, '..') ||
+            str_starts_with($relativePath, DIRECTORY_SEPARATOR)
         ) {
             return response()->json([
                 'success' => false,
@@ -290,25 +303,39 @@ class HRSubmissionController extends Controller
             ], 400);
         }
 
-        $basePath = rtrim(
-            $file->BasePath,
-            '/\\'
+        $fullPath = realpath(
+            $basePath . DIRECTORY_SEPARATOR . $relativePath
         );
 
-        $fullPath = $basePath . DIRECTORY_SEPARATOR . $relativePath;
+        // Verify that the resolved file remains inside BasePath
+        $normalizedBase = rtrim(
+            $basePath,
+            DIRECTORY_SEPARATOR
+        ) . DIRECTORY_SEPARATOR;
 
-        if (!File::exists($fullPath)) {
+        if (
+            !$fullPath ||
+            !is_file($fullPath) ||
+            !str_starts_with(
+                strtolower($fullPath),
+                strtolower($normalizedBase)
+            )
+        ) {
             return response()->json([
                 'success' => false,
-                'message' => 'الملف غير موجود على خادم التخزين.',
+                'message' => 'الملف غير موجود أو مساره غير صالح.',
             ], 404);
         }
 
+        $mimeType = File::mimeType($fullPath)
+            ?: 'application/octet-stream';
+
+        // Return the file inline for browser preview
         return response()->file($fullPath, [
-            'Content-Disposition' =>
-                'inline; filename="' .
-                rawurlencode($file->OriginalFileName) .
-                '"',
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
         ]);
     }
 }

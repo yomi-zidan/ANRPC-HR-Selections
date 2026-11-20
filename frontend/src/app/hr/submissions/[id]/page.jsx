@@ -2,13 +2,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import FilePreviewModal from "@/components/submissions/FilePreviewModal";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
   Star,
   FileText,
-  Download,
   Eye,
   RefreshCw,
   UserRound,
@@ -33,6 +33,7 @@ function StorySection({ title, children }) {
       <h2 className="mb-5 text-xl font-bold text-[#102F5F]">
         {title}
       </h2>
+
       <div className="whitespace-pre-wrap leading-8 text-slate-700">
         {children || "لم يتم إدخال بيانات."}
       </div>
@@ -45,15 +46,22 @@ export default function HRSubmissionDetails() {
   const router = useRouter();
   const id = params.id;
 
+  const [previewFile, setPreviewFile] = useState(null);
   const [submission, setSubmission] = useState(null);
+
   const [stars, setStars] = useState(0);
   const [notes, setNotes] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [openingFile, setOpeningFile] = useState(null);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // =========================================
+  // Load submission details
+  // =========================================
   const loadSubmission = useCallback(async () => {
     const token = getToken();
 
@@ -69,6 +77,7 @@ export default function HRSubmissionDetails() {
       const response = await fetch(
         `${API_URL}/hr/submissions/${id}`,
         {
+          method: "GET",
           headers: {
             Accept: "application/json",
             Authorization: `Bearer ${token}`,
@@ -87,76 +96,30 @@ export default function HRSubmissionDetails() {
       }
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "تعذر تحميل تفاصيل المشاركة.");
+        throw new Error(
+          result.message || "تعذر تحميل تفاصيل المشاركة."
+        );
       }
 
       setSubmission(result.submission);
       setStars(Number(result.submission.my_review?.Stars || 0));
       setNotes(result.submission.my_review?.Notes || "");
     } catch (err) {
+      console.error("Load Submission Error:", err);
       setError(err.message || "حدث خطأ أثناء تحميل المشاركة.");
     } finally {
       setLoading(false);
     }
   }, [id, router]);
 
+  // Load only once per submission ID
   useEffect(() => {
-    let active = true;
+    loadSubmission();
+  }, [loadSubmission]);
 
-    async function fetchDetails() {
-      const token = getToken();
-
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${API_URL}/hr/submissions/${id}`,
-          {
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
-
-        const result = await response.json();
-
-        if (response.status === 401) {
-          sessionStorage.removeItem("hr_token");
-          sessionStorage.removeItem("hr_user");
-          router.replace("/login");
-          return;
-        }
-
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || "تعذر تحميل تفاصيل المشاركة.");
-        }
-
-        if (active) {
-          setSubmission(result.submission);
-          setStars(Number(result.submission.my_review?.Stars || 0));
-          setNotes(result.submission.my_review?.Notes || "");
-        }
-      } catch (err) {
-        if (active) {
-          setError(err.message || "حدث خطأ أثناء تحميل المشاركة.");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    fetchDetails();
-
-    return () => {
-      active = false;
-    };
-  }, [id, router]);
-
+  // =========================================
+  // Save or update evaluation
+  // =========================================
   async function handleSaveEvaluation(e) {
     e.preventDefault();
 
@@ -170,6 +133,13 @@ export default function HRSubmissionDetails() {
       setError("");
       setMessage("");
 
+      const token = getToken();
+
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
       const response = await fetch(
         `${API_URL}/hr/submissions/${id}/evaluate`,
         {
@@ -177,7 +147,7 @@ export default function HRSubmissionDetails() {
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            Authorization: `Bearer ${getToken()}`,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             stars,
@@ -200,23 +170,46 @@ export default function HRSubmissionDetails() {
       }
 
       setMessage("تم حفظ التقييم بنجاح.");
+
       await loadSubmission();
     } catch (err) {
+      console.error("Save Evaluation Error:", err);
       setError(err.message || "حدث خطأ أثناء حفظ التقييم.");
     } finally {
       setSaving(false);
     }
   }
 
+  // =========================================
+  // Preview attachment inside the website
+  // =========================================
   async function handleOpenFile(file) {
     try {
       setOpeningFile(file.id);
       setError("");
+      setMessage("");
 
+      const token = getToken();
+
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      // Close any previous preview before opening another file
+      if (previewFile?.url) {
+        URL.revokeObjectURL(previewFile.url);
+        setPreviewFile(null);
+      }
+
+      // Fetch the protected file using the HR token
       const response = await fetch(file.url, {
+        method: "GET",
         headers: {
-          Authorization: `Bearer ${getToken()}`,
+          Authorization: `Bearer ${token}`,
+          Accept: "*/*",
         },
+        cache: "no-store",
       });
 
       if (response.status === 401) {
@@ -227,29 +220,66 @@ export default function HRSubmissionDetails() {
       }
 
       if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.message || "تعذر فتح المرفق.");
+        let result = {};
+
+        try {
+          result = await response.json();
+        } catch {
+          // Response may not be JSON
+        }
+
+        throw new Error(
+          result.message || "تعذر تحميل المرفق."
+        );
       }
 
+      // Read the response as a Blob instead of navigating to file.url
       const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const openedWindow = window.open(objectUrl, "_blank");
 
-      if (!openedWindow) {
-        const link = document.createElement("a");
-        link.href = objectUrl;
-        link.download = file.name;
-        link.click();
+      if (!blob.size) {
+        throw new Error("الملف فارغ أو تعذر قراءته.");
       }
 
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      // Create a temporary URL for the preview modal
+      const objectUrl = URL.createObjectURL(blob);
+
+      setPreviewFile({
+        id: file.id,
+        name: file.name,
+        blob,
+        url: objectUrl,
+      });
     } catch (err) {
+      console.error("File Preview Error:", err);
       setError(err.message || "تعذر فتح المرفق.");
     } finally {
       setOpeningFile(null);
     }
   }
 
+  // =========================================
+  // Close preview and release temporary URL
+  // =========================================
+  function handleClosePreview() {
+    if (previewFile?.url) {
+      URL.revokeObjectURL(previewFile.url);
+    }
+
+    setPreviewFile(null);
+  }
+
+  // Release temporary URL if the page is unmounted
+  useEffect(() => {
+    return () => {
+      if (previewFile?.url) {
+        URL.revokeObjectURL(previewFile.url);
+      }
+    };
+  }, [previewFile]);
+
+  // =========================================
+  // Loading state
+  // =========================================
   if (loading) {
     return (
       <main
@@ -264,6 +294,9 @@ export default function HRSubmissionDetails() {
     );
   }
 
+  // =========================================
+  // Error state
+  // =========================================
   if (error && !submission) {
     return (
       <main
@@ -271,11 +304,17 @@ export default function HRSubmissionDetails() {
         className="min-h-screen bg-[#F2F4F8] px-5 py-10 md:px-12"
       >
         <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-white p-8 text-center">
-          <AlertCircle className="mx-auto mb-4 text-red-500" size={32} />
+          <AlertCircle
+            className="mx-auto mb-4 text-red-500"
+            size={32}
+          />
+
           <p className="mb-5 text-red-600">{error}</p>
+
           <button
+            type="button"
             onClick={loadSubmission}
-            className="rounded-xl bg-[#163B63] px-6 py-3 text-white"
+            className="cursor-pointer rounded-xl bg-[#163B63] px-6 py-3 text-white transition hover:bg-[#0D2B4B]"
           >
             إعادة المحاولة
           </button>
@@ -286,6 +325,9 @@ export default function HRSubmissionDetails() {
 
   if (!submission) return null;
 
+  // =========================================
+  // Main page
+  // =========================================
   return (
     <main
       dir="rtl"
@@ -311,6 +353,7 @@ export default function HRSubmissionDetails() {
         {/* Employee and story information */}
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
 
+          {/* Main content */}
           <div className="space-y-6">
 
             {/* Submission information */}
@@ -323,6 +366,7 @@ export default function HRSubmissionDetails() {
 
                 <div className="flex items-center gap-3 text-slate-700">
                   <UserRound size={19} className="text-[#163B63]" />
+
                   <span>
                     <strong>اسم الموظف:</strong>{" "}
                     {submission.employee_name}
@@ -330,7 +374,10 @@ export default function HRSubmissionDetails() {
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-700">
-                  <span className="font-semibold text-[#163B63]">#</span>
+                  <span className="font-semibold text-[#163B63]">
+                    #
+                  </span>
+
                   <span>
                     <strong>الرقم الوظيفي:</strong>{" "}
                     {submission.empn}
@@ -339,6 +386,7 @@ export default function HRSubmissionDetails() {
 
                 <div className="flex items-center gap-3 text-slate-700">
                   <Building2 size={19} className="text-[#163B63]" />
+
                   <span>
                     <strong>الإدارة:</strong>{" "}
                     {submission.department_name || "—"}
@@ -346,17 +394,24 @@ export default function HRSubmissionDetails() {
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-700">
-                  <CalendarDays size={19} className="text-[#163B63]" />
+                  <CalendarDays
+                    size={19}
+                    className="text-[#163B63]"
+                  />
+
                   <span>
                     <strong>تاريخ التقديم:</strong>{" "}
                     {submission.created_at
-                      ? new Date(submission.created_at).toLocaleDateString("ar-EG")
+                      ? new Date(
+                          submission.created_at
+                        ).toLocaleDateString("ar-EG")
                       : "—"}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-700">
                   <FileText size={19} className="text-[#163B63]" />
+
                   <span>
                     <strong>نوع الترشيح:</strong>{" "}
                     {submission.submission_type_name}
@@ -365,6 +420,7 @@ export default function HRSubmissionDetails() {
 
                 <div className="flex items-center gap-3 text-slate-700">
                   <MapPin size={19} className="text-[#163B63]" />
+
                   <span>
                     <strong>الموقع:</strong>{" "}
                     {submission.location || "—"}
@@ -375,6 +431,7 @@ export default function HRSubmissionDetails() {
               {submission.team_members && (
                 <div className="mt-5 border-t border-slate-100 pt-5 text-sm text-slate-700">
                   <strong>أعضاء الفريق:</strong>
+
                   <p className="mt-2 whitespace-pre-wrap">
                     {submission.team_members}
                   </p>
@@ -440,7 +497,10 @@ export default function HRSubmissionDetails() {
                       className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 py-4 last:border-0"
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <FileText className="shrink-0 text-[#163B63]" size={23} />
+                        <FileText
+                          className="shrink-0 text-[#163B63]"
+                          size={23}
+                        />
 
                         <div className="min-w-0">
                           <p className="break-all font-medium text-slate-700">
@@ -449,6 +509,7 @@ export default function HRSubmissionDetails() {
 
                           <p className="mt-1 text-xs text-slate-500">
                             {file.type_name || "مرفق"}
+
                             {file.size
                               ? ` • ${(file.size / 1024 / 1024).toFixed(2)} MB`
                               : ""}
@@ -460,15 +521,20 @@ export default function HRSubmissionDetails() {
                         type="button"
                         onClick={() => handleOpenFile(file)}
                         disabled={openingFile === file.id}
-                        className="inline-flex items-center gap-2 rounded-lg border border-[#163B63] px-5 py-2.5 text-sm text-[#163B63] transition hover:bg-[#163B63] hover:text-white disabled:opacity-50"
+                        className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#163B63] px-5 py-2.5 text-sm text-[#163B63] transition hover:bg-[#163B63] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {openingFile === file.id ? (
-                          <RefreshCw size={16} className="animate-spin" />
+                          <RefreshCw
+                            size={16}
+                            className="animate-spin"
+                          />
                         ) : (
                           <Eye size={16} />
                         )}
 
-                        معاينة
+                        {openingFile === file.id
+                          ? "جاري التحميل..."
+                          : "معاينة"}
                       </button>
                     </div>
                   ))}
@@ -495,14 +561,17 @@ export default function HRSubmissionDetails() {
                 اختاري التقييم من نجمة إلى خمس نجوم
               </p>
 
-              <div className="mb-8 flex items-center justify-center gap-2" dir="ltr">
+              <div
+                className="mb-8 flex items-center justify-center gap-2"
+                dir="ltr"
+              >
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setStars(value)}
                     aria-label={`تقييم ${value} من 5`}
-                    className="rounded-md p-1 transition hover:scale-110"
+                    className="cursor-pointer rounded-md p-1 transition hover:scale-110"
                   >
                     <Star
                       size={35}
@@ -517,8 +586,10 @@ export default function HRSubmissionDetails() {
                 ))}
               </div>
 
-              <div className="mb-6 text-center text-sm font-semibold text-amber-700">
-                {stars > 0 ? `${stars} من 5 نجوم` : "لم يتم اختيار تقييم"}
+              <div className="mb-8 text-center text-sm font-semibold text-amber-700">
+                {stars > 0
+                  ? `${stars} من 5 نجوم`
+                  : "لم يتم اختيار تقييم"}
               </div>
 
               <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -536,7 +607,11 @@ export default function HRSubmissionDetails() {
 
               {error && (
                 <div className="mt-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600">
-                  <AlertCircle size={17} className="mt-0.5 shrink-0" />
+                  <AlertCircle
+                    size={17}
+                    className="mt-0.5 shrink-0"
+                  />
+
                   {error}
                 </div>
               )}
@@ -551,11 +626,14 @@ export default function HRSubmissionDetails() {
               <button
                 type="submit"
                 disabled={saving || stars === 0}
-                className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#102F5F] font-semibold text-white transition hover:bg-[#0B2449] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-6 flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#102F5F] font-semibold text-white transition hover:bg-[#0B2449] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? (
                   <>
-                    <RefreshCw size={18} className="animate-spin" />
+                    <RefreshCw
+                      size={18}
+                      className="animate-spin"
+                    />
                     جاري حفظ التقييم...
                   </>
                 ) : (
@@ -571,6 +649,14 @@ export default function HRSubmissionDetails() {
             </form>
           </aside>
         </div>
+
+        {/* File Preview Modal */}
+        {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            onClose={handleClosePreview}
+          />
+        )}
       </div>
     </main>
   );
